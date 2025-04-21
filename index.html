@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Anonymous Chat Rooms</title>
+    <style>
+        :root {
+            --matrix-green: #0f0;
+            --glitch-color-1: #0ff;
+            --glitch-color-2: #f0f;
+            --background: #001100;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: var(--background);
+            color: var(--matrix-green);
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* GLITCH EFFECTS */
+        .glitch {
+            animation: glitch 1s linear infinite;
+            text-shadow: 0.05em 0 0 var(--glitch-color-1),
+                        -0.03em -0.04em 0 var(--glitch-color-2),
+                        0.025em 0.04em 0 var(--matrix-green);
+        }
+
+        @keyframes glitch {
+            0% { transform: translate(0) }
+            20% { transform: translate(-2px, 2px) }
+            40% { transform: translate(-2px, -2px) }
+            60% { transform: translate(2px, 2px) }
+            80% { transform: translate(2px, -2px) }
+            100% { transform: translate(0) }
+        }
+
+        .scanlines {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom,
+                transparent 50%,
+                rgba(0, 255, 0, 0.1) 51%,
+                transparent 51%);
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        .matrix-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.1;
+            z-index: -1;
+        }
+
+        /* CHAT UI */
+        .sidebar {
+            width: 250px;
+            border-right: 2px dashed var(--matrix-green);
+            padding: 20px;
+            background: rgba(0, 20, 0, 0.9);
+        }
+
+        .chat-container {
+            flex: 1;
+            padding: 20px;
+            position: relative;
+        }
+
+        #messages {
+            height: 80vh;
+            overflow-y: auto;
+            border: 1px solid var(--matrix-green);
+            padding: 15px;
+            margin-bottom: 15px;
+            background: rgba(0, 10, 0, 0.8);
+        }
+
+        .message {
+            margin: 10px 0;
+            padding: 8px;
+            border-left: 3px solid var(--matrix-green);
+            animation: type 0.3s steps(40) 1;
+        }
+
+        @keyframes type {
+            from { width: 0; opacity: 0; }
+            to { width: 100%; opacity: 1; }
+        }
+
+        input, button {
+            background: #002200;
+            border: 1px solid var(--matrix-green);
+            color: var(--matrix-green);
+            padding: 10px;
+            margin: 5px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        button:hover {
+            background: #003300;
+            animation: glitch 0.5s infinite;
+        }
+
+        #usernameInput::before {
+            content: "> ";
+        }
+    </style>
+</head>
+<body>
+    <div class="matrix-bg" id="matrixEffect"></div>
+    <div class="scanlines"></div>
+    
+    <div class="container">
+        <div class="sidebar glitch">
+            <h2>root@chat:~</h2>
+            <div id="roomList">
+                <button onclick="joinRoom('mainframe')">/mainframe</button>
+                <button onclick="joinRoom('cypher')">/cypher</button>
+                <button onclick="createNewRoom()">+ mkdir</button>
+            </div>
+            <div style="margin-top: 20px;">
+                <input type="text" id="usernameInput" placeholder="user@terminal">
+                <button onclick="setUsername()">SET_IDENTITY</button>
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <h2 class="glitch" id="roomName">/mainframe</h2>
+            <div id="messages"></div>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="messageInput" placeholder="> input message">
+                <button onclick="sendMessage()">EXECUTE</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+        import { getDatabase, ref, push, onChildAdded, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+
+        const firebaseConfig = {             
+            apiKey: "AIzaSyBsRr5ckbSEjGHuAzXionGIBZFC_Hi3KOE",
+            authDomain: "chatroom-5acc8.firebaseapp.com",
+            databaseURL: "https://chatroom-5acc8-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "chatroom-5acc8",
+            storageBucket: "chatroom-5acc8.firebasestorage.app",
+            messagingSenderId: "314287788761",
+            appId: "1:314287788761:web:d1b841d79cccd0173de4c8",
+            measurementId: "G-5F78QBR08Y"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        let currentRoom = 'general';
+        let username = localStorage.getItem('username') || 'Anonymous';
+
+        // Initialize UI
+        document.getElementById('usernameInput').value = username;
+        setupRoom(currentRoom);
+
+        function setupRoom(roomName) {
+            currentRoom = roomName;
+            document.getElementById('roomName').textContent = `# ${roomName}`;
+            const messagesRef = ref(db, `rooms/${roomName}/messages`);
+            
+            // Clear existing messages
+            document.getElementById('messages').innerHTML = '';
+            
+            onChildAdded(messagesRef, (snapshot) => {
+                const message = snapshot.val();
+                displayMessage(message);
+            });
+        }
+
+        function displayMessage(message) {
+            const messagesDiv = document.getElementById('messages');
+            const messageElement = document.createElement('div');
+            messageElement.className = 'message';
+            messageElement.innerHTML = `
+                <span class="username">${message.username}:</span>
+                <span class="text">${message.text}</span>
+            `;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function createMatrixEffect() {
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*()";
+            const matrix = document.getElementById('matrixEffect');
+            
+            setInterval(() => {
+                const span = document.createElement('span');
+                span.style = `position: absolute; left: ${Math.random() * 100}%; 
+                            animation: fall ${Math.random() * 5 + 3}s linear; 
+                            opacity: ${Math.random() * 0.5};`;
+                span.textContent = chars[Math.floor(Math.random() * chars.length)];
+                matrix.appendChild(span);
+                
+                setTimeout(() => span.remove(), 5000);
+            }, 100);
+        }
+        createMatrixEffect();
+
+        // Fixed message sending
+        let isSending = false;
+        window.sendMessage = () => {
+            if (isSending) return;
+            isSending = true;
+            
+            const messageInput = document.getElementById('messageInput');
+            const text = messageInput.value.trim();
+            
+            if (text) {
+                push(ref(db, `rooms/${currentRoom}/messages`), {
+                    text,
+                    username,
+                    timestamp: serverTimestamp()
+                }).catch(error => {
+                    console.error("TRANSMISSION FAILED:", error);
+                    alert("ERROR 0x539: MESSAGE CORRUPTED");
+                }).finally(() => {
+                    isSending = false;
+                    messageInput.value = '';
+                });
+            } else {
+                isSending = false;
+            }
+        };
+
+        window.setUsername = () => {
+            const newUsername = document.getElementById('usernameInput').value.trim();
+            if (newUsername) {
+                username = newUsername;
+                localStorage.setItem('username', username);
+                alert('Username updated!');
+            }
+        };
+
+        window.joinRoom = (roomName) => {
+            setupRoom(roomName);
+        };
+
+        window.createNewRoom = () => {
+            const roomName = prompt('Enter new room name:');
+            if (roomName) {
+                setupRoom(roomName.toLowerCase().replace(/ /g, '-'));
+            }
+        };
+    </script>
+</body>
+</html>
