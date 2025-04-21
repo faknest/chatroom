@@ -2,121 +2,37 @@
 <html>
 <head>
     <title>Anonymous Chat Rooms</title>
-    <style>
-        :root {
-            --matrix-green: #0f0;
-            --glitch-color-1: #0ff;
-            --glitch-color-2: #f0f;
-            --background: #001100;
-        }
-
-        body {
-            font-family: 'Courier New', monospace;
-            background-color: var(--background);
-            color: var(--matrix-green);
-            margin: 0;
-            overflow: hidden;
-        }
-
-        .container {
-            display: flex;
-            height: 100vh;
-            position: relative;
-        }
-
-        .glitch {
-            animation: glitch 1s linear infinite;
-            text-shadow: 0.05em 0 0 var(--glitch-color-1),
-                        -0.03em -0.04em 0 var(--glitch-color-2),
-                        0.025em 0.04em 0 var(--matrix-green);
-        }
-
-        @keyframes glitch {
-            0% { transform: translate(0) }
-            20% { transform: translate(-2px, 2px) }
-            40% { transform: translate(-2px, -2px) }
-            60% { transform: translate(2px, 2px) }
-            80% { transform: translate(2px, -2px) }
-            100% { transform: translate(0) }
-        }
-
-        .scanlines {
-            position: fixed;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(to bottom,
-                transparent 50%,
-                rgba(0, 255, 0, 0.1) 51%,
-                transparent 51%);
-            background-size: 100% 4px;
-            pointer-events: none;
-            z-index: 999;
-        }
-
-        .matrix-bg {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            opacity: 0.1;
-            z-index: -1;
-        }
-
-        .sidebar {
-            width: 250px;
-            border-right: 2px dashed var(--matrix-green);
-            padding: 20px;
-            background: rgba(0, 20, 0, 0.9);
-        }
-
-        .chat-container {
-            flex: 1;
-            padding: 20px;
-            position: relative;
-        }
-
-        #messages {
-            height: 80vh;
-            overflow-y: auto;
-            border: 1px solid var(--matrix-green);
-            padding: 15px;
-            margin-bottom: 15px;
-            background: rgba(0, 10, 0, 0.8);
-        }
-
-        .message {
-            margin: 10px 0;
-            padding: 8px;
-            border-left: 3px solid var(--matrix-green);
-            animation: type 0.3s steps(40) 1;
-        }
-
-        @keyframes type {
-            from { width: 0; opacity: 0; }
-            to { width: 100%; opacity: 1; }
-        }
-
-        input, button {
-            background: #002200;
-            border: 1px solid var(--matrix-green);
-            color: var(--matrix-green);
-            padding: 10px;
-            margin: 5px 0;
-            font-family: 'Courier New', monospace;
-        }
-
-        button:hover {
-            background: #003300;
-            animation: glitch 0.5s infinite;
-        }
-
-        #usernameInput::before {
-            content: "> ";
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div class="help-trigger" onmouseover="showHelp()" onmouseout="hideHelp()">
+        <div class="glitch" style="font-size:24px;">⛓️</div>
+        <div class="help-modal" id="helpModal">
+            <div class="modal-content">
+                <div class="modal-header">[SYSTEM PROTOCOL]</div>
+                <div class="modal-body">
+                    <div class="command">$ roomctl --create</div>
+                    <div class="instruction">1. Execute "+ mkdir" command</div>
+                    
+                    <div class="command" style="margin-top:15px;">$ roomctl --share</div>
+                    <div class="instruction">2. Transmit generated URL:</div>
+                    <div class="url-display">faknest.github.io/chatroom?room=</div>
+                    
+                    <div class="warning" style="margin-top:15px;">⚠️ DATA PERSISTENCE ACTIVE</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="shareModal" class="cyber-modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeShareModal()">&times;</span>
+            <h3 class="glitch-text">SECURE CHANNEL ESTABLISHED</h3>
+            <div class="url-box" id="generatedUrl"></div>
+            <button onclick="copyLink()" class="cyber-button">ENCRYPT & COPY LINK</button>
+        </div>
+    </div>
+
     <div class="matrix-bg" id="matrixEffect"></div>
     <div class="scanlines"></div>
     
@@ -143,7 +59,6 @@
             </div>
         </div>
     </div>
-
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
         import { getDatabase, ref, push, onChildAdded, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
@@ -161,8 +76,9 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        let currentRoom = '/mainframe';
+        let currentRoom = 'mainframe'; 
         let username = localStorage.getItem('username') || 'Anonymous';
+        let isSending = false;
 
         document.getElementById('usernameInput').value = username;
         setupRoom(currentRoom);
@@ -171,7 +87,7 @@
             currentRoom = roomName;
             document.getElementById('roomName').textContent = `# ${roomName}`;
             const messagesRef = ref(db, `rooms/${roomName}/messages`);
-
+            
             document.getElementById('messages').innerHTML = '';
             
             onChildAdded(messagesRef, (snapshot) => {
@@ -208,9 +124,6 @@
             }, 100);
         }
         createMatrixEffect();
-
-        // Fixed message sending
-        let isSending = false;
         window.sendMessage = () => {
             if (isSending) return;
             isSending = true;
@@ -248,12 +161,72 @@
             setupRoom(roomName);
         };
 
-        window.createNewRoom = () => {
-            const roomName = prompt('Enter new room name:');
+        function closeShareModal() {
+            document.getElementById('shareModal').style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('shareModal');
+            if (event.target === modal) {
+                closeShareModal();
+            }
+        }
+
+        function copyLink() {
+            const url = document.getElementById('generatedUrl').innerText;
+            navigator.clipboard.writeText(url).then(() => {
+                const btn = document.querySelector('.cyber-button');
+                btn.textContent = "LINK COPIED!";
+                setTimeout(() => {
+                    btn.textContent = "ENCRYPT & COPY LINK";
+                    closeShareModal();
+                }, 2000);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                alert('ERROR 0x1F4: MANUAL COPY REQUIRED');
+            });
+        }
+
+        window.createNewRoom = async () => { 
+            const roomName = prompt('ENTER ENCRYPTED CHANNEL ID:');
             if (roomName) {
-                setupRoom(roomName.toLowerCase().replace(/ /g, '-'));
+                try {
+                    const cleanName = roomName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+                    const fullUrl = `${window.location.origin}${window.location.pathname}?room=${cleanName}`;
+                    
+                    const messagesRef = ref(db, `rooms/${cleanName}/messages`);
+                    await push(messagesRef, {
+                        text: "Channel initialized",
+                        username: "System",
+                        timestamp: serverTimestamp()
+                    });
+                    
+                    document.getElementById('generatedUrl').innerText = fullUrl;
+                    document.getElementById('shareModal').style.display = 'block';
+                    setupRoom(cleanName);
+                    
+                    const roomList = document.getElementById('roomList');
+                    const newRoomButton = document.createElement('button');
+                    newRoomButton.textContent = `/${cleanName}`;
+                    newRoomButton.onclick = () => joinRoom(cleanName);
+                    roomList.insertBefore(newRoomButton, roomList.lastElementChild);
+                    
+                } catch (error) {
+                    console.error("Room creation failed:", error);
+                    alert("ERROR 0x1F2: CHANNEL INITIALIZATION FAILED");
+                }
             }
         };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomParam = urlParams.get('room');
+            
+            if (roomParam) {
+                setupRoom(roomParam);
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        });
     </script>
 </body>
 </html>
