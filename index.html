@@ -24,7 +24,6 @@
             position: relative;
         }
 
-        /* GLITCH EFFECTS */
         .glitch {
             animation: glitch 1s linear infinite;
             text-shadow: 0.05em 0 0 var(--glitch-color-1),
@@ -64,7 +63,6 @@
             z-index: -1;
         }
 
-        /* CHAT UI */
         .sidebar {
             width: 250px;
             border-right: 2px dashed var(--matrix-green);
@@ -163,10 +161,9 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        let currentRoom = 'general';
+        let currentRoom = '/mainframe';
         let username = localStorage.getItem('username') || 'Anonymous';
 
-        // Initialize UI
         document.getElementById('usernameInput').value = username;
         setupRoom(currentRoom);
 
@@ -174,8 +171,7 @@
             currentRoom = roomName;
             document.getElementById('roomName').textContent = `# ${roomName}`;
             const messagesRef = ref(db, `rooms/${roomName}/messages`);
-            
-            // Clear existing messages
+
             document.getElementById('messages').innerHTML = '';
             
             onChildAdded(messagesRef, (snapshot) => {
